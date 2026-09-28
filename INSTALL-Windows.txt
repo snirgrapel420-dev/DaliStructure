@@ -1,0 +1,27 @@
+DaliStructure by Dali Audio - התקנה ב-Windows
+==============================================
+
+1. העתק את התיקייה DaliStructure.vst3 (כל התיקייה) אל:
+      C:\Program Files\Common Files\VST3
+   Windows יבקש אישור מנהל. זה תקין.
+
+2. ב-Ableton Live:
+      Options > Preferences > Plug-Ins
+      הפעל: Use VST3 Plug-in System Folders = On
+      לחץ Rescan
+
+3. הפלאגין יופיע ב-Browser תחת:
+      Plug-Ins > VST3 > Dali Audio > DaliStructure
+   גרור אותו לערוץ MIDI (הוא Instrument).
+
+4. בחלון הפלאגין: גרור טראק רפרנס (WAV / AIFF / MP3 / FLAC) או לחץ Load Reference.
+
+גרסה עצמאית (בלי Ableton):
+   DaliStructure.exe - פתח ישירות. בהפעלה הראשונה בחר כרטיס קול ב-Options.
+
+כלי שורת פקודה (לבדיקת דיוק על טראקים):
+   dali_analyze.exe <קובץ.wav או תיקייה>
+
+Cache של ניתוחים:
+   %APPDATA%\Dali Audio\DaliStructure\Cache
+   (אפשר למחוק בבטחה; טראקים ינותחו מחדש)
