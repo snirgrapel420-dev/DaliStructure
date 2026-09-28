@@ -79,6 +79,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
+    void parentHierarchyChanged() override;
 
     bool isInterestedInFileDrag (const juce::StringArray&) override;
     void fileDragEnter (const juce::StringArray&, int, int) override { dragOver = true; repaint(); }
@@ -90,6 +91,7 @@ private:
     void timerCallback() override;
     void refresh();
     void chooseFile();
+    void ensureReliableRenderer();
     juce::Rectangle<int> contentArea() const;
 
     DaliStructureProcessor& proc;
@@ -108,6 +110,7 @@ private:
     dali_ui::DetailsPanel details;
     std::shared_ptr<const dali::StructureDocument> shownDoc;
     bool dragOver = false;
+    bool rendererChecked = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DaliStructureEditor)
 };

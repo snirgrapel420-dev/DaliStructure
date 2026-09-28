@@ -593,8 +593,32 @@ void DaliStructureEditor::refresh()
 
 void DaliStructureEditor::changeListenerCallback (juce::ChangeBroadcaster*) { refresh(); }
 
+// JUCE 8 draws with Direct2D on Windows by default. Inside some hosts / with some
+// GPU drivers this produces a blank or black plugin window. The software renderer
+// works everywhere and is more than fast enough for this UI.
+void DaliStructureEditor::ensureReliableRenderer()
+{
+   #if JUCE_WINDOWS
+    if (rendererChecked) return;
+    if (auto* peer = getPeer())
+    {
+        if (peer->getCurrentRenderingEngine() != 0)
+            peer->setCurrentRenderingEngine (0);
+        rendererChecked = true;
+        repaint();
+    }
+   #endif
+}
+
+void DaliStructureEditor::parentHierarchyChanged()
+{
+    rendererChecked = false;
+    ensureReliableRenderer();
+}
+
 void DaliStructureEditor::timerCallback()
 {
+    ensureReliableRenderer();
     playButton.setButtonText (proc.isPlaying() ? "Pause" : "Play");
     const auto st = proc.getStatus();
     const bool busy = st == DaliStructureProcessor::Status::Loading || st == DaliStructureProcessor::Status::Analyzing;
