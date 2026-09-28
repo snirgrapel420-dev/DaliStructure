@@ -13,7 +13,7 @@ jobs:
       - name: Get the code
         uses: actions/checkout@v4
 
-      - name: Configure (downloads JUCE automatically)
+      - name: Configure
         run: cmake -B build -A x64 -DDALI_BUILD_PLUGIN=ON
 
       - name: Build plugin, tests and CLI
@@ -25,10 +25,9 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           $out = "DaliStructure-Windows"
-
           New-Item -ItemType Directory -Force $out | Out-Null
 
-          Write-Host "Searching for VST3..."
+          Write-Host "===== SEARCHING FOR VST3 ====="
 
           $vst3 = Get-ChildItem `
             -Path build `
@@ -42,14 +41,13 @@ jobs:
             throw "VST3 bundle not found"
           }
 
-          Write-Host "Found VST3: $($vst3.FullName)"
+          Write-Host "Found:"
+          Write-Host $vst3.FullName
 
           Copy-Item `
             -Recurse `
             $vst3.FullName `
             "$out/"
-
-          Write-Host "Searching for Standalone..."
 
           $exe = Get-ChildItem `
             -Path build `
@@ -60,14 +58,10 @@ jobs:
             Select-Object -First 1
 
           if ($exe) {
-            Write-Host "Found Standalone: $($exe.FullName)"
+            Write-Host "Found Standalone:"
+            Write-Host $exe.FullName
             Copy-Item $exe.FullName "$out/"
           }
-          else {
-            Write-Host "Standalone executable not found - continuing"
-          }
-
-          Write-Host "Searching for CLI..."
 
           $cli = Get-ChildItem `
             -Path build `
@@ -77,11 +71,9 @@ jobs:
             Select-Object -First 1
 
           if ($cli) {
-            Write-Host "Found CLI: $($cli.FullName)"
+            Write-Host "Found CLI:"
+            Write-Host $cli.FullName
             Copy-Item $cli.FullName "$out/"
-          }
-          else {
-            Write-Host "CLI executable not found - continuing"
           }
 
           if (-not (Test-Path "INSTALL-Windows.txt")) {
@@ -96,25 +88,19 @@ jobs:
           Get-ChildItem -Recurse $out |
             Select-Object FullName
 
-      - name: Upload plugin
-        uses: actions/upload-artifact@v4
-        with:
-          name: DaliStructure-Windows
-          path: DaliStructure-Windows
-
-      - name: Run engine tests (143 checks)
+      - name: Run engine tests
         run: |
           ctest `
             --test-dir build `
             -C Release `
             --output-on-failure
 
-      - name: Check DLL dependencies (must not need the Visual C++ Redistributable)
+      - name: Check DLL dependencies
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          Write-Host "Finding Visual Studio installation..."
+          Write-Host "===== CHECKING DLL DEPENDENCIES ====="
 
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
             -latest `
@@ -123,8 +109,6 @@ jobs:
           if (-not $vs) {
             throw "Visual Studio installation was not found"
           }
-
-          Write-Host "Visual Studio: $vs"
 
           $dumpbin = Get-ChildItem `
             "$vs\VC\Tools\MSVC" `
@@ -137,8 +121,6 @@ jobs:
             throw "dumpbin.exe was not found"
           }
 
-          Write-Host "dumpbin: $($dumpbin.FullName)"
-
           $dll = Get-ChildItem `
             DaliStructure-Windows `
             -Recurse `
@@ -147,64 +129,52 @@ jobs:
             Select-Object -First 1
 
           if (-not $dll) {
-            throw "DaliStructure.vst3 was not found in package"
+            throw "DaliStructure.vst3 was not found"
           }
-
-          Write-Host "Checking dependencies for:"
-          Write-Host $dll.FullName
 
           $deps = & $dumpbin.FullName /dependents $dll.FullName |
             Out-String
 
-          Write-Host ""
-          Write-Host "===== DLL DEPENDENCIES ====="
           Write-Host $deps
 
           if ($deps -match "VCRUNTIME|MSVCP") {
             throw "Plugin still depends on the Visual C++ runtime DLLs"
           }
 
-          Write-Host ""
-          Write-Host "DLL dependency check passed."
+          Write-Host "DLL dependency check PASSED."
 
       - name: Validate plugin with pluginval
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          Write-Host "===== DOWNLOADING PLUGINVAL ====="
+          Write-Host ""
+          Write-Host "============================================================"
+          Write-Host "                 PLUGINVAL VALIDATION"
+          Write-Host "============================================================"
+
+          Write-Host ""
+          Write-Host "Downloading pluginval..."
 
           Invoke-WebRequest `
             -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" `
             -OutFile pluginval.zip
-
-          if (-not (Test-Path "pluginval.zip")) {
-            throw "pluginval.zip was not downloaded"
-          }
-
-          Write-Host "Extracting pluginval..."
 
           Expand-Archive `
             pluginval.zip `
             -DestinationPath pluginval `
             -Force
 
-          $exe = Get-ChildItem `
+          $pluginvalExe = Get-ChildItem `
             pluginval `
             -Recurse `
             -File `
             -Filter "pluginval.exe" |
             Select-Object -First 1
 
-          if (-not $exe) {
-            throw "pluginval.exe was not found after extraction"
+          if (-not $pluginvalExe) {
+            throw "pluginval.exe was not found"
           }
-
-          Write-Host "pluginval executable:"
-          Write-Host $exe.FullName
-
-          Write-Host ""
-          Write-Host "===== LOCATING VST3 ====="
 
           $vst3 = Get-ChildItem `
             DaliStructure-Windows `
@@ -214,14 +184,18 @@ jobs:
             Select-Object -First 1
 
           if (-not $vst3) {
-            throw "No VST3 plugin found in DaliStructure-Windows"
+            throw "No VST3 plugin found"
           }
 
-          Write-Host "VST3 plugin:"
-          Write-Host $vst3.FullName
+          Write-Host ""
+          Write-Host "pluginval:"
+          Write-Host $pluginvalExe.FullName
 
           Write-Host ""
-          Write-Host "===== RUNNING PLUGINVAL ====="
+          Write-Host "Plugin:"
+          Write-Host $vst3.FullName
+
+          $logFile = Join-Path $PWD "pluginval-output.txt"
 
           $arguments = @(
             "--strictness-level", "5",
@@ -232,20 +206,117 @@ jobs:
             $vst3.FullName
           )
 
+          Write-Host ""
           Write-Host "Command:"
-          Write-Host "$($exe.FullName) $($arguments -join ' ')"
+          Write-Host "$($pluginvalExe.FullName) $($arguments -join ' ')"
 
-          & $exe.FullName @arguments
+          Write-Host ""
+          Write-Host "===== STARTING PLUGINVAL ====="
+          Write-Host ""
+
+          & $pluginvalExe.FullName @arguments 2>&1 |
+            Tee-Object -FilePath $logFile
 
           $exitCode = $LASTEXITCODE
 
           Write-Host ""
-          Write-Host "===== PLUGINVAL RESULT ====="
-          Write-Host "pluginval exit code: $exitCode"
+          Write-Host "===== PLUGINVAL PROCESS EXIT CODE ====="
+          Write-Host $exitCode
+
+          Write-Host ""
+          Write-Host "============================================================"
+          Write-Host "                 PLUGINVAL TEST SUMMARY"
+          Write-Host "============================================================"
+
+          $log = Get-Content $logFile -Raw
+
+          $testStarts = [regex]::Matches(
+            $log,
+            'Starting tests in: pluginval / (.+)'
+          )
+
+          $completed = [regex]::Matches(
+            $log,
+            'Completed tests in pluginval / (.+)'
+          )
+
+          Write-Host ""
+          Write-Host "Tests detected: $($testStarts.Count)"
+          Write-Host "Tests completed: $($completed.Count)"
+
+          Write-Host ""
+          Write-Host "Completed tests:"
+
+          foreach ($match in $completed) {
+            Write-Host "  [PASS] $($match.Groups[1].Value)"
+          }
+
+          Write-Host ""
+          Write-Host "Looking for failures..."
+
+          $failurePatterns = @(
+            "FAIL",
+            "FAILED",
+            "Error:",
+            "ERROR:",
+            "Exception:",
+            "assert",
+            "crash",
+            "timeout",
+            "timed out"
+          )
+
+          $failureLines = @()
+
+          foreach ($line in (Get-Content $logFile)) {
+            foreach ($pattern in $failurePatterns) {
+              if ($line -match $pattern) {
+                $failureLines += $line
+                break
+              }
+            }
+          }
+
+          if ($failureLines.Count -gt 0) {
+            Write-Host ""
+            Write-Host "===== POSSIBLE FAILURE DETAILS ====="
+
+            foreach ($line in $failureLines) {
+              Write-Host "  $line"
+            }
+          }
+
+          Write-Host ""
+          Write-Host "============================================================"
 
           if ($exitCode -ne 0) {
+            Write-Host ""
+            Write-Host "PLUGINVAL FAILED."
+            Write-Host ""
+            Write-Host "The build will intentionally fail."
+            Write-Host "Nothing is being ignored or bypassed."
+            Write-Host ""
+            Write-Host "Full pluginval output was saved to:"
+            Write-Host $logFile
+
             throw "pluginval failed with exit code $exitCode"
           }
 
           Write-Host ""
           Write-Host "PLUGINVAL PASSED."
+          Write-Host "All validation requirements passed."
+
+      - name: Upload pluginval diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DaliStructure-pluginval-diagnostics
+          path: pluginval-output.txt
+          if-no-files-found: ignore
+
+      - name: Upload plugin
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DaliStructure-Windows
+          path: DaliStructure-Windows
