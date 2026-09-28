@@ -1,0 +1,43 @@
+name: Build DaliStructure
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Configure (downloads JUCE automatically)
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DDALI_BUILD_PLUGIN=ON
+
+      - name: Build plugin, tests and CLI
+        run: cmake --build build --config Release --parallel
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = "DaliStructure-Windows"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $vst3 = Get-ChildItem -Path build -Recurse -Directory -Filter "DaliStructure.vst3" | Where-Object { $_.FullName -like "*Release*" } | Select-Object -First 1
+          if (-not $vst3) { throw "VST3 bundle not found" }
+          Copy-Item -Recurse $vst3.FullName "$out/"
+          $exe = Get-ChildItem -Path build -Recurse -File -Filter "DaliStructure.exe" | Where-Object { $_.FullName -like "*Standalone*" } | Select-Object -First 1
+          if ($exe) { Copy-Item $exe.FullName "$out/" }
+          $cli = Get-ChildItem -Path build -Recurse -File -Filter "dali_analyze.exe" | Select-Object -First 1
+          if ($cli) { Copy-Item $cli.FullName "$out/" }
+          Copy-Item "INSTALL-Windows.txt" "$out/"
+          Get-ChildItem -Recurse $out | Select-Object FullName
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: DaliStructure-Windows
+          path: DaliStructure-Windows
+
+      - name: Run engine tests (143 checks)
+        run: ctest --test-dir build -C Release --output-on-failure
