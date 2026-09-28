@@ -41,3 +41,25 @@ jobs:
 
       - name: Run engine tests (143 checks)
         run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Check DLL dependencies (must not need the Visual C++ Redistributable)
+        if: always()
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -like "*Hostx64\x64*" } | Select-Object -First 1
+          $dll = Get-ChildItem DaliStructure-Windows -Recurse -File -Filter "DaliStructure.vst3" | Select-Object -First 1
+          & $dumpbin.FullName /dependents $dll.FullName
+          $deps = & $dumpbin.FullName /dependents $dll.FullName | Out-String
+          if ($deps -match "VCRUNTIME|MSVCP") { throw "Plugin still depends on the Visual C++ runtime DLLs" }
+
+      - name: Validate plugin with pluginval (loads it exactly like a DAW)
+        if: always()
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" -OutFile pluginval.zip
+          Expand-Archive pluginval.zip -DestinationPath pluginval -Force
+          $exe = Get-ChildItem pluginval -Recurse -File -Filter "pluginval.exe" | Select-Object -First 1
+          $vst3 = Get-ChildItem DaliStructure-Windows -Directory -Filter "*.vst3" | Select-Object -First 1
+          & $exe.FullName --strictness-level 5 --validate-in-process --timeout-ms 300000 --verbose $vst3.FullName
+          if ($LASTEXITCODE -ne 0) { throw "pluginval failed (exit code $LASTEXITCODE)" }
